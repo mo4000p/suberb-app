@@ -82,20 +82,26 @@ export default function Home() {
     try {
       setApproving(true);
       setStatus("Waiting for approval...");
-      const { ethers } = await import("ethers");
-      const provider   = new ethers.BrowserProvider(window.ethereum);
-      const signer     = await provider.getSigner();
-      const USDC_ABI   = ["function approve(address spender, uint256 amount) external returns (bool)"];
-      const usdc       = new ethers.Contract(USDC_ADDRESS, USDC_ABI, signer);
-      const amountWei  = ethers.parseUnits(amount.toString(), 6);
-      const tx         = await usdc.approve(SWAP_ROUTER_ADDRESS, amountWei);
-      setStatus("Approving...");
-      await tx.wait();
+
+      // Encode approve(spender, amount) — no ethers needed
+      const spender    = SWAP_ROUTER_ADDRESS.replace("0x", "").padStart(64, "0");
+      const amountHex  = Math.floor(amount * 1e6).toString(16).padStart(64, "0");
+      const data       = "0x095ea7b3" + spender + amountHex;
+
+      const txHash = await window.ethereum.request({
+        method: "eth_sendTransaction",
+        params: [{ from: account, to: USDC_ADDRESS, data }],
+      });
+
+      setStatus("Approval sent — waiting for confirmation...");
+
+      // Register with brain
       await fetch(`${RAILWAY_URL}/register`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ userAddress: account, approvedAmount: Number(amountWei.toString()) }),
+        body:    JSON.stringify({ userAddress: account, approvedAmount: amount * 1e6 }),
       });
+
       await fetchBalances(account);
       setStatus(`Approved $${amount} USDC ✓ — bot is now trading for you`);
     } catch (err) {
@@ -307,7 +313,7 @@ export default function Home() {
           <>
             <div className="chat-messages">
               {messages.length === 0 && (
-                <div className="msg bot">Hey! I'm your superB trading bot. Tell me what to do — scalp a token, go whale hunting, or ask about your trades.</div>
+                <div className="msg bot">Hey! I am your superB trading bot. Tell me what to do — scalp a token, go whale hunting, or ask about your trades.</div>
               )}
               {messages.map((m, i) => (
                 <div key={i} className={`msg ${m.role === "user" ? "user" : "bot"}`}>{m.content}</div>
@@ -353,7 +359,7 @@ export default function Home() {
               Your funds are always in your wallet. To revoke bot access, visit BaseScan and set allowance to 0.
             </div>
             <a className="settings-link" href={`https://basescan.org/address/${USDC_ADDRESS}#writeContract`} target="_blank" rel="noreferrer">
-              → REVOKE ON BASESCAN
+              REVOKE ON BASESCAN
             </a>
             <div className="section-title" style={{marginTop:24}}>ABOUT</div>
             <div className="settings-row">
