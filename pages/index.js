@@ -6,23 +6,30 @@ const SWAP_ROUTER_ADDRESS = "0x2626664c2603336E57B271c5C0b26F421741e481";
 const RAILWAY_URL         = "https://courageous-imagination-production-378d.up.railway.app";
 const BASE_CHAIN_ID       = "0x2105";
 
-const USDC_ABI = [
-  "function approve(address spender, uint256 amount) external returns (bool)",
-  "function allowance(address owner, address spender) external view returns (uint256)",
-  "function balanceOf(address account) external view returns (uint256)",
-];
+function encodeBalanceOf(address) {
+  const sig = "0x70a08231";
+  const padded = address.replace("0x", "").padStart(64, "0");
+  return sig + padded;
+}
+
+function encodeAllowance(owner, spender) {
+  const sig = "0xdd62ed3e";
+  const paddedOwner   = owner.replace("0x", "").padStart(64, "0");
+  const paddedSpender = spender.replace("0x", "").padStart(64, "0");
+  return sig + paddedOwner + paddedSpender;
+}
 
 export default function Home() {
-  const [account,      setAccount]      = useState(null);
-  const [usdcBalance,  setUsdcBalance]  = useState("0.00");
-  const [allowance,    setAllowance]    = useState("0.00");
-  const [mode,         setMode]         = useState("default");
-  const [screen,       setScreen]       = useState("home");
-  const [messages,     setMessages]     = useState([]);
-  const [input,        setInput]        = useState("");
-  const [loading,      setLoading]      = useState(false);
-  const [approving,    setApproving]    = useState(false);
-  const [status,       setStatus]       = useState("");
+  const [account,     setAccount]     = useState(null);
+  const [usdcBalance, setUsdcBalance] = useState("0.00");
+  const [allowance,   setAllowance]   = useState("0.00");
+  const [mode,        setMode]        = useState("default");
+  const [screen,      setScreen]      = useState("home");
+  const [messages,    setMessages]    = useState([]);
+  const [input,       setInput]       = useState("");
+  const [loading,     setLoading]     = useState(false);
+  const [approving,   setApproving]   = useState(false);
+  const [status,      setStatus]      = useState("");
   const chatEndRef = useRef(null);
 
   useEffect(() => {
@@ -32,7 +39,7 @@ export default function Home() {
   async function connectWallet() {
     try {
       if (!window.ethereum) {
-        alert("Please open in Coinbase Wallet or install MetaMask");
+        alert("Please open in Coinbase Wallet or MetaMask");
         return;
       }
       const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
@@ -53,15 +60,21 @@ export default function Home() {
 
   async function fetchBalances(addr) {
     try {
-      const { ethers } = await import("ethers");
-      const provider   = new ethers.BrowserProvider(window.ethereum);
-      const usdc       = new ethers.Contract(USDC_ADDRESS, USDC_ABI, provider);
-      const bal        = await usdc.balanceOf(addr);
-      const alw        = await usdc.allowance(addr, SWAP_ROUTER_ADDRESS);
-      setUsdcBalance((Number(bal) / 1e6).toFixed(2));
-      setAllowance((Number(alw) / 1e6).toFixed(2));
+      const balResult = await window.ethereum.request({
+        method: "eth_call",
+        params: [{ to: USDC_ADDRESS, data: encodeBalanceOf(addr) }, "latest"],
+      });
+      const bal = parseInt(balResult, 16) / 1e6;
+      setUsdcBalance(isNaN(bal) ? "0.00" : bal.toFixed(2));
+
+      const alwResult = await window.ethereum.request({
+        method: "eth_call",
+        params: [{ to: USDC_ADDRESS, data: encodeAllowance(addr, SWAP_ROUTER_ADDRESS) }, "latest"],
+      });
+      const alw = parseInt(alwResult, 16) / 1e6;
+      setAllowance(isNaN(alw) ? "0.00" : alw.toFixed(2));
     } catch (err) {
-      console.error("Balance fetch error:", err.message);
+      setStatus("Balance fetch failed: " + err.message);
     }
   }
 
@@ -72,6 +85,7 @@ export default function Home() {
       const { ethers } = await import("ethers");
       const provider   = new ethers.BrowserProvider(window.ethereum);
       const signer     = await provider.getSigner();
+      const USDC_ABI   = ["function approve(address spender, uint256 amount) external returns (bool)"];
       const usdc       = new ethers.Contract(USDC_ADDRESS, USDC_ABI, signer);
       const amountWei  = ethers.parseUnits(amount.toString(), 6);
       const tx         = await usdc.approve(SWAP_ROUTER_ADDRESS, amountWei);
@@ -105,11 +119,8 @@ export default function Home() {
       });
       const data = await res.json();
       setMessages(prev => [...prev, { role: "bot", content: data.reply }]);
-      if (userMsg.toLowerCase().includes("default mode") || userMsg.toLowerCase().includes("reset")) {
-        setMode("default");
-      } else if (userMsg.toLowerCase().includes("scalp") || userMsg.toLowerCase().includes("watch")) {
-        setMode("custom");
-      }
+      if (userMsg.toLowerCase().includes("default mode") || userMsg.toLowerCase().includes("reset")) setMode("default");
+      else if (userMsg.toLowerCase().includes("scalp") || userMsg.toLowerCase().includes("watch")) setMode("custom");
     } catch (err) {
       setMessages(prev => [...prev, { role: "bot", content: "Connection error. Try again." }]);
     } finally {
@@ -168,12 +179,10 @@ export default function Home() {
         .balance-amount { font-family: 'Space Mono', monospace; font-size: 28px; font-weight: 700; color: #fff; }
         .balance-sub { font-size: 12px; color: #556068; margin-top: 2px; }
         .allowance-tag { font-size: 11px; color: #00e676; font-family: 'Space Mono', monospace; }
-        .connect-btn { width: 100%; padding: 16px; background: #00e676; color: #080c0f; border: none; border-radius: 12px; font-family: 'Space Mono', monospace; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
-        .connect-btn:hover { background: #00ff85; transform: translateY(-1px); }
+        .connect-btn { width: 100%; padding: 16px; background: #00e676; color: #080c0f; border: none; border-radius: 12px; font-family: 'Space Mono', monospace; font-size: 14px; font-weight: 700; cursor: pointer; }
         .section-title { font-family: 'Space Mono', monospace; font-size: 11px; color: #556068; letter-spacing: 1px; margin: 20px 0 12px; }
         .mode-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 20px; }
         .mode-card { background: #0d1419; border: 1px solid #1a2228; border-radius: 12px; padding: 14px 10px; text-align: center; cursor: pointer; transition: all 0.2s; }
-        .mode-card:hover { border-color: #00e676; transform: translateY(-2px); }
         .mode-card.active { border-color: #00e676; background: #0a1f14; }
         .mode-icon { font-size: 22px; margin-bottom: 6px; }
         .mode-name { font-family: 'Space Mono', monospace; font-size: 10px; color: #8a9ba8; }
@@ -187,13 +196,14 @@ export default function Home() {
         .approve-btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .status { font-size: 12px; color: #556068; text-align: center; padding: 8px; font-family: 'Space Mono', monospace; }
         .status.ok { color: #00e676; }
+        .refresh-btn { background: none; border: 1px solid #1a2228; border-radius: 8px; color: #556068; font-size: 11px; padding: 4px 10px; cursor: pointer; font-family: 'Space Mono', monospace; }
         .chat-messages { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - 220px); }
         .msg { max-width: 80%; padding: 12px 14px; border-radius: 12px; font-size: 14px; line-height: 1.5; }
         .msg.user { background: #00e676; color: #080c0f; align-self: flex-end; font-weight: 500; }
         .msg.bot  { background: #0d1419; border: 1px solid #1a2228; color: #e8eaed; align-self: flex-start; font-family: 'Space Mono', monospace; font-size: 12px; }
         .msg.bot.loading { color: #556068; }
         .chat-input-row { display: flex; gap: 8px; padding: 16px; border-top: 1px solid #1a2228; }
-        .chat-input { flex: 1; background: #0d1419; border: 1px solid #1a2228; border-radius: 10px; padding: 12px 14px; color: #e8eaed; font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; }
+        .chat-input { flex: 1; background: #0d1419; border: 1px solid #1a2228; border-radius: 10px; padding: 12px 14px; color: #e8eaed; font-size: 14px; outline: none; }
         .chat-input:focus { border-color: #00e676; }
         .chat-input::placeholder { color: #556068; }
         .send-btn { padding: 12px 16px; background: #00e676; border: none; border-radius: 10px; color: #080c0f; font-family: 'Space Mono', monospace; font-size: 12px; cursor: pointer; font-weight: 700; }
@@ -205,6 +215,7 @@ export default function Home() {
         .pulse { animation: pulse 2s infinite; }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
       `}</style>
+
       <div className="app">
         <div className="header">
           <div className="logo">super<span>B</span></div>
@@ -219,6 +230,7 @@ export default function Home() {
             </button>
           ))}
         </div>
+
         {screen === "home" && (
           <div className="screen">
             {!account ? (
@@ -233,7 +245,10 @@ export default function Home() {
             ) : (
               <>
                 <div className="wallet-card">
-                  <div className="wallet-label">YOUR WALLET</div>
+                  <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8}}>
+                    <div className="wallet-label" style={{margin:0}}>YOUR WALLET</div>
+                    <button className="refresh-btn" onClick={() => fetchBalances(account)}>↻ REFRESH</button>
+                  </div>
                   <div className="wallet-addr">{account.slice(0,6)}...{account.slice(-4)}</div>
                   <div className="balance-row">
                     <div>
@@ -246,12 +261,13 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
+
                 <div className="section-title">TRADING MODE</div>
                 <div className="mode-grid">
                   {[
                     { id:"default", icon:"🔍", name:"DEFAULT" },
-                    { id:"scalp",   icon:"⚡",        name:"SCALP"   },
-                    { id:"whale",   icon:"🐋",  name:"WHALE"   },
+                    { id:"scalp",   icon:"⚡", name:"SCALP"   },
+                    { id:"whale",   icon:"🐋", name:"WHALE"   },
                   ].map(m => (
                     <div key={m.id} className={`mode-card ${mode === m.id ? "active" : ""}`} onClick={() => setQuickMode(m.id)}>
                       <div className="mode-icon">{m.icon}</div>
@@ -259,6 +275,7 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
+
                 <div className="approve-card">
                   <div className="approve-title">SET TRADING LIMIT</div>
                   <div className="approve-desc">Approve USDC for the bot to trade. Funds stay in your wallet — revoke anytime.</div>
@@ -270,7 +287,9 @@ export default function Home() {
                     ))}
                   </div>
                 </div>
+
                 {status && <div className={`status ${status.includes("✓") ? "ok" : ""}`}>{status}</div>}
+
                 <div className="wallet-card" style={{marginTop:8}}>
                   <div className="wallet-label">BOT STATUS</div>
                   <div style={{display:"flex", alignItems:"center", gap:8, marginTop:4}}>
@@ -283,6 +302,7 @@ export default function Home() {
             )}
           </div>
         )}
+
         {screen === "chat" && (
           <>
             <div className="chat-messages">
@@ -308,6 +328,7 @@ export default function Home() {
             </div>
           </>
         )}
+
         {screen === "settings" && (
           <div className="screen">
             <div className="section-title">ACCOUNT</div>
