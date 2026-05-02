@@ -72,7 +72,7 @@ export default function SuperB() {
   async function loadVaultBalance() {
     if (!wallet || !window.ethereum) return;
     try {
-      const encoded = '0xab53b2f7' + wallet.slice(2).toLowerCase().padStart(64, '0');
+      const encoded = '0x05b1137b' + wallet.slice(2).toLowerCase().padStart(64, '0');
       const result = await window.ethereum.request({ method: 'eth_call', params: [{ to: BOTVAULT_ADDRESS, data: encoded }, 'latest'] });
       if (result && result !== '0x') {
         const ethBalance = Number(BigInt(result)) / 1e18;
