@@ -89,7 +89,7 @@ export default function SuperB() {
       const weiAmount = BigInt(Math.floor((parseFloat(depositAmount) / ethPrice) * 1e18));
       const txHash = await window.ethereum.request({
         method: 'eth_sendTransaction',
-        params: [{ from: wallet, to: BOTVAULT_ADDRESS, value: '0x' + weiAmount.toString(16), data: '0xf6b55ba9' }],
+        params: [{ from: wallet, to: BOTVAULT_ADDRESS, value: '0x' + weiAmount.toString(16), data: '0x439370b1' }],
       });
       setTxStatus('Waiting for confirmation...');
       let receipt = null;
