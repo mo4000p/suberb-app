@@ -20,11 +20,10 @@ function encodeAllowance(owner, spender) {
 }
 
 export default function Home() {
-  const [account,          setAccount]          = useState(null);
-  const [executorAddress,  setExecutorAddress]  = useState(null);
-  const [usdcBalance,      setUsdcBalance]      = useState("0.00");
-  const [allowance,        setAllowance]        = useState("0.00");
-  const [mode,             setMode]             = useState("default");
+  const [account,     setAccount]     = useState(null);
+  const [usdcBalance, setUsdcBalance] = useState("0.00");
+  const [allowance,   setAllowance]   = useState("0.00");
+  const [mode,        setMode]        = useState("default");
   const [screen,      setScreen]      = useState("home");
   const [messages,    setMessages]    = useState([]);
   const [input,       setInput]       = useState("");
@@ -36,17 +35,6 @@ export default function Home() {
   useEffect(() => {
     if (chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
-  useEffect(() => {
-    fetch(`${RAILWAY_URL}/executor-address`)
-      .then(r => r.json())
-      .then(d => { if (d.executorAddress) setExecutorAddress(d.executorAddress); })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (executorAddress && account) fetchBalances(account);
-  }, [executorAddress]);
 
   async function connectWallet() {
     try {
@@ -79,30 +67,24 @@ export default function Home() {
       const bal = parseInt(balResult, 16) / 1e6;
       setUsdcBalance(isNaN(bal) ? "0.00" : bal.toFixed(2));
 
-      if (executorAddress) {
-        const alwResult = await window.ethereum.request({
-          method: "eth_call",
-          params: [{ to: USDC_ADDRESS, data: encodeAllowance(addr, executorAddress) }, "latest"],
-        });
-        const alw = parseInt(alwResult, 16) / 1e6;
-        setAllowance(isNaN(alw) ? "0.00" : alw.toFixed(2));
-      }
+      const alwResult = await window.ethereum.request({
+        method: "eth_call",
+        params: [{ to: USDC_ADDRESS, data: encodeAllowance(addr, EXECUTOR_ADDRESS) }, "latest"],
+      });
+      const alw = parseInt(alwResult, 16) / 1e6;
+      setAllowance(isNaN(alw) ? "0.00" : alw.toFixed(2));
     } catch (err) {
       setStatus("Balance fetch failed: " + err.message);
     }
   }
 
   async function approveUSDC(amount) {
-    if (!executorAddress) {
-      setStatus("Bot not ready — try again in a moment");
-      return;
-    }
     try {
       setApproving(true);
       setStatus("Waiting for approval...");
 
       // Encode approve(spender, amount) — no ethers needed
-      const spender   = executorAddress.replace("0x", "").padStart(64, "0");
+      const spender   = EXECUTOR_ADDRESS.replace("0x", "").padStart(64, "0");
       const amountHex = Math.floor(amount * 1e6).toString(16).padStart(64, "0");
       const data      = "0x095ea7b3" + spender + amountHex;
 
@@ -305,12 +287,11 @@ export default function Home() {
                   <div className="approve-desc">Approve the bot to pull USDC from your wallet when trading. Revoke anytime to stop.</div>
                   <div className="approve-grid">
                     {[20, 50, 100, 250].map(amt => (
-                      <button key={amt} className="approve-btn" disabled={approving || !executorAddress} onClick={() => approveUSDC(amt)}>
+                      <button key={amt} className="approve-btn" disabled={approving} onClick={() => approveUSDC(amt)}>
                         ${amt}
                       </button>
                     ))}
                   </div>
-                  {!executorAddress && <div className="status">connecting to bot...</div>}
                 </div>
 
                 {status && <div className={`status ${status.includes("✓") ? "ok" : ""}`}>{status}</div>}
