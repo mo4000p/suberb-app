@@ -90,7 +90,7 @@ export default function Home() {
 
       const txHash = await window.ethereum.request({
         method: "eth_sendTransaction",
-        params: [{ from: account, to: USDC_ADDRESS, data }],
+        params: [{ from: account, to: USDC_ADDRESS, data, gas: "0x186A0" }],
       });
 
       setStatus("Approval sent — waiting for confirmation...");
