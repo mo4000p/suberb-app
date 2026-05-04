@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import Head from "next/head";
 
-const USDC_ADDRESS  = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-const RAILWAY_URL   = "https://courageous-imagination-production-378d.up.railway.app";
-const BASE_CHAIN_ID = "0x2105";
+const USDC_ADDRESS      = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+const EXECUTOR_ADDRESS  = "0xA614bd493884A7f1828B7930E8D87290c79Aaf70";
+const RAILWAY_URL       = "https://courageous-imagination-production-378d.up.railway.app";
+const BASE_CHAIN_ID     = "0x2105";
 
 function encodeBalanceOf(address) {
   const sig = "0x70a08231";
