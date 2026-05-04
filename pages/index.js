@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import Head from "next/head";
 
-const USDC_ADDRESS        = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-const SWAP_ROUTER_ADDRESS = "0x2626664c2603336E57B271c5C0b26F421741e481";
-const RAILWAY_URL         = "https://courageous-imagination-production-378d.up.railway.app";
-const BASE_CHAIN_ID       = "0x2105";
+const USDC_ADDRESS  = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+const RAILWAY_URL   = "https://courageous-imagination-production-378d.up.railway.app";
+const BASE_CHAIN_ID = "0x2105";
 
 function encodeBalanceOf(address) {
   const sig = "0x70a08231";
@@ -13,17 +12,18 @@ function encodeBalanceOf(address) {
 }
 
 function encodeAllowance(owner, spender) {
-  const sig = "0xdd62ed3e";
+  const sig           = "0xdd62ed3e";
   const paddedOwner   = owner.replace("0x", "").padStart(64, "0");
   const paddedSpender = spender.replace("0x", "").padStart(64, "0");
   return sig + paddedOwner + paddedSpender;
 }
 
 export default function Home() {
-  const [account,     setAccount]     = useState(null);
-  const [usdcBalance, setUsdcBalance] = useState("0.00");
-  const [allowance,   setAllowance]   = useState("0.00");
-  const [mode,        setMode]        = useState("default");
+  const [account,          setAccount]          = useState(null);
+  const [executorAddress,  setExecutorAddress]  = useState(null);
+  const [usdcBalance,      setUsdcBalance]      = useState("0.00");
+  const [allowance,        setAllowance]        = useState("0.00");
+  const [mode,             setMode]             = useState("default");
   const [screen,      setScreen]      = useState("home");
   const [messages,    setMessages]    = useState([]);
   const [input,       setInput]       = useState("");
@@ -35,6 +35,17 @@ export default function Home() {
   useEffect(() => {
     if (chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    fetch(`${RAILWAY_URL}/executor-address`)
+      .then(r => r.json())
+      .then(d => { if (d.executorAddress) setExecutorAddress(d.executorAddress); })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (executorAddress && account) fetchBalances(account);
+  }, [executorAddress]);
 
   async function connectWallet() {
     try {
@@ -67,26 +78,32 @@ export default function Home() {
       const bal = parseInt(balResult, 16) / 1e6;
       setUsdcBalance(isNaN(bal) ? "0.00" : bal.toFixed(2));
 
-      const alwResult = await window.ethereum.request({
-        method: "eth_call",
-        params: [{ to: USDC_ADDRESS, data: encodeAllowance(addr, SWAP_ROUTER_ADDRESS) }, "latest"],
-      });
-      const alw = parseInt(alwResult, 16) / 1e6;
-      setAllowance(isNaN(alw) ? "0.00" : alw.toFixed(2));
+      if (executorAddress) {
+        const alwResult = await window.ethereum.request({
+          method: "eth_call",
+          params: [{ to: USDC_ADDRESS, data: encodeAllowance(addr, executorAddress) }, "latest"],
+        });
+        const alw = parseInt(alwResult, 16) / 1e6;
+        setAllowance(isNaN(alw) ? "0.00" : alw.toFixed(2));
+      }
     } catch (err) {
       setStatus("Balance fetch failed: " + err.message);
     }
   }
 
   async function approveUSDC(amount) {
+    if (!executorAddress) {
+      setStatus("Bot not ready — try again in a moment");
+      return;
+    }
     try {
       setApproving(true);
       setStatus("Waiting for approval...");
 
       // Encode approve(spender, amount) — no ethers needed
-      const spender    = SWAP_ROUTER_ADDRESS.replace("0x", "").padStart(64, "0");
-      const amountHex  = Math.floor(amount * 1e6).toString(16).padStart(64, "0");
-      const data       = "0x095ea7b3" + spender + amountHex;
+      const spender   = executorAddress.replace("0x", "").padStart(64, "0");
+      const amountHex = Math.floor(amount * 1e6).toString(16).padStart(64, "0");
+      const data      = "0x095ea7b3" + spender + amountHex;
 
       const txHash = await window.ethereum.request({
         method: "eth_sendTransaction",
@@ -284,14 +301,15 @@ export default function Home() {
 
                 <div className="approve-card">
                   <div className="approve-title">SET TRADING LIMIT</div>
-                  <div className="approve-desc">Approve USDC for the bot to trade. Funds stay in your wallet — revoke anytime.</div>
+                  <div className="approve-desc">Approve the bot to pull USDC from your wallet when trading. Revoke anytime to stop.</div>
                   <div className="approve-grid">
                     {[20, 50, 100, 250].map(amt => (
-                      <button key={amt} className="approve-btn" disabled={approving} onClick={() => approveUSDC(amt)}>
+                      <button key={amt} className="approve-btn" disabled={approving || !executorAddress} onClick={() => approveUSDC(amt)}>
                         ${amt}
                       </button>
                     ))}
                   </div>
+                  {!executorAddress && <div className="status">connecting to bot...</div>}
                 </div>
 
                 {status && <div className={`status ${status.includes("✓") ? "ok" : ""}`}>{status}</div>}
@@ -354,9 +372,9 @@ export default function Home() {
               <div className="settings-label">Mode</div>
               <div className="settings-value">{mode.toUpperCase()}</div>
             </div>
-            <div className="section-title" style={{marginTop:24}}>EMERGENCY WITHDRAWAL</div>
+            <div className="section-title" style={{marginTop:24}}>REVOKE ACCESS</div>
             <div style={{fontSize:13, color:"#556068", lineHeight:1.6, marginBottom:16}}>
-              Your funds are always in your wallet. To revoke bot access, visit BaseScan and set allowance to 0.
+              To stop the bot, revoke its USDC allowance on BaseScan. Set the approval amount to 0 for the executor address.
             </div>
             <a className="settings-link" href={`https://basescan.org/address/${USDC_ADDRESS}#writeContract`} target="_blank" rel="noreferrer">
               REVOKE ON BASESCAN
